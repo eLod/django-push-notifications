@@ -1,13 +1,15 @@
 from __future__ import absolute_import
 
 from rest_framework import permissions
-from rest_framework.serializers import Serializer, ModelSerializer, ValidationError
+from rest_framework.serializers import Serializer, ModelSerializer, ValidationError, HiddenField, CurrentUserDefault
+from rest_framework.validators import UniqueTogetherValidator
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.fields import IntegerField
 
 from push_notifications.models import APNSDevice, GCMDevice, WNSDevice
 from push_notifications.fields import hex_re
 from push_notifications.fields import UNSIGNED_64BIT_INT_MAX_VALUE
+from push_notifications.settings import PUSH_NOTIFICATIONS_SETTINGS as SETTINGS
 
 
 # Fields
@@ -42,8 +44,18 @@ class DeviceSerializerMixin(ModelSerializer):
 
 
 class APNSDeviceSerializer(ModelSerializer):
+	user = HiddenField(default=CurrentUserDefault())
+
 	class Meta(DeviceSerializerMixin.Meta):
 		model = APNSDevice
+		fields = ("id", "name", "registration_id", "device_id", "active", "date_created", "user")
+		if SETTINGS["APNS_REGISTRATION_ID_UNIQUE_WITH_USER_ID"]:
+			validators = [
+				UniqueTogetherValidator(
+					queryset=APNSDevice.objects.all(),
+					fields=("registration_id", "user")
+				)
+			]
 
 	def validate_registration_id(self, value):
 		# iOS device tokens are 256-bit hexadecimal (64 characters). In 2016 Apple is increasing
